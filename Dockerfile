@@ -1,50 +1,33 @@
-FROM python:3.12-slim
+FROM python:3.11-slim
 
-# System deps. tmux is required by Cookbook for background downloads/serves.
-# openssh-client is required for Cookbook remote server tests, setup, probes,
-# downloads, and serves from Docker installs.
-# git/cmake are required when Cookbook builds llama.cpp on first llama.cpp
-# launch inside Docker.
-# nodejs/npm provide npx for the optional built-in Browser MCP server.
-# gosu lets the entrypoint drop privileges cleanly so signals still reach
-# uvicorn directly (no extra shell layer like `su`/`sudo` would add).
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    cmake \
-    curl \
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
     git \
-    nodejs \
-    npm \
-    tmux \
-    openssh-client \
-    gosu \
+    curl \
+    sqlite3 \
+    libsqlite3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+# Set up user with UID 1000 (Hugging Face requirement)
+RUN useradd -m -u 1000 user
+USER user
+ENV HOME=/home/user \
+    PATH=/home/user/.local/bin:$PATH
 
-# Install Python deps first (layer cache). Optional extras (PyMuPDF AGPL, etc.)
-# are opt-in so the default image stays MIT-core; see requirements-optional.txt.
-ARG INSTALL_OPTIONAL=false
-COPY requirements.txt requirements-optional.txt ./
-RUN pip install --no-cache-dir -r requirements.txt \
-    && if [ "$INSTALL_OPTIONAL" = "true" ]; then pip install --no-cache-dir -r requirements-optional.txt; fi
+WORKDIR $HOME/app
 
-# Copy app code
-COPY . .
+# Copy requirements and install
+COPY --chown=user:user requirements.txt .
+RUN pip install --no-cache-dir --user -r requirements.txt
 
-# Create data directory (mount a volume here for persistence)
+# Copy the rest of the application
+COPY --chown=user:user . .
+
+# Create necessary directories
 RUN mkdir -p data logs services/cache/search
 
-# Entrypoint that drops to PUID/PGID (default 1000:1000) and repairs
-# ownership on the bind-mounted /app/data and /app/logs. Without this,
-# the container runs as root and writes root-owned files into host
-# bind mounts — any later non-root run (or a host user trying to
-# update them) silently fails on EPERM, breaking skill extraction,
-# prefs persistence, mail attachments, etc.
-COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+# Expose Hugging Face default port
+EXPOSE 7860
 
-EXPOSE 7000
-
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7000"]
+# Command to run the application on port 7860
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]

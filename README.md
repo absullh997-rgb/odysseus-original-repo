@@ -9,4 +9,4 @@ pinned: false
 ---
 
 # Odysseus AI - Original Version
-This repository contains the original code of Odysseus AI, synced to Hugging Face Spaces.
+This repository contains the original code of Odysseus AI, optimized for Hugging Face Spaces.
