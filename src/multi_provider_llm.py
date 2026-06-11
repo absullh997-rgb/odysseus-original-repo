@@ -38,8 +38,8 @@ PROVIDERS: List[Dict[str, Any]] = [
         "free_models": [
             "llama-3.3-70b-versatile",
             "llama-3.1-8b-instant",
-            "qwen3-32b",
-            "deepseek-r1-distill-70b",
+            "qwen-2.5-32b",
+            "deepseek-r1-distill-llama-70b",
         ],
         "rate_limit_rpm": 30,
         "context_window": 131072,

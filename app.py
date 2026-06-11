@@ -48,6 +48,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.gzip import GZipMiddleware
+from src.github_storage import start_sync_thread
+from routes.provider_router_routes import setup_provider_router_routes
 
 # Core imports
 from core.constants import (
@@ -80,10 +82,23 @@ logger = logging.getLogger(__name__)
 # and passed to FastAPI so we can use the modern context-manager lifecycle
 # instead of the deprecated @app.on_event("startup"/"shutdown") decorators.
 app = FastAPI(
-    title="AI Chat Application",
-    description="Comprehensive AI chat with memory, research, and multi-modal capabilities",
-    version="1.0.0",
+    title="Odysseus AI",
+    description="Distributed AI Architecture - Optimized for Hugging Face Spaces",
+    version="1.1.0",
 )
+
+# Initialize distributed components and storage sync
+@app.on_event("startup")
+async def startup_event():
+    # Start GitHub storage sync in background to handle persistent data
+    if os.getenv("GITHUB_TOKEN") and os.getenv("GITHUB_REPO"):
+        logger.info("🚀 Initializing GitHub Distributed Storage Sync...")
+        start_sync_thread()
+    else:
+        logger.warning("⚠️ GitHub Storage Sync disabled (Missing GITHUB_TOKEN or GITHUB_REPO)")
+
+# Register distributed routes for multi-provider LLM and research offloading
+app.include_router(setup_provider_router_routes())
 
 # ========= CORS =========
 allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost,http://127.0.0.1").split(",")
