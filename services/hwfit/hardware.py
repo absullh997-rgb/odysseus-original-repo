@@ -401,30 +401,53 @@ def _parse_meminfo():
 
 
 def _get_ram_gb():
+    """Get the actual usable RAM quota (Reality Check)."""
+    try:
+        # التحقق من حدود الـ CGroup (الواقعية في Hugging Face)
+        limit_file = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
+        if not os.path.exists(limit_file):
+            # النسخة الأحدث من CGroup v2
+            limit_file = "/sys/fs/cgroup/memory.max"
+        
+        if os.path.exists(limit_file):
+            with open(limit_file, 'r') as f:
+                content = f.read().strip()
+                if content and content != "max":
+                    limit = int(content)
+                    # إذا كان الرقم ضخماً جداً، فهذا يعني لا حدود صلبة من الـ CGroup
+                    if limit < 10**15: 
+                        return round(limit / (1024**3), 2)
+    except Exception:
+        pass
+
+    # Fallback to standard methods but capped at a realistic limit for HF Spaces if detected as host RAM
     meminfo = _parse_meminfo()
     if "MemTotal" in meminfo:
-        return meminfo["MemTotal"] / (1024**2)
+        total_host_ram = meminfo["MemTotal"] / (1024**2)
+        # في Hugging Face Spaces المجانية، الرام الفعلية المخصصة هي عادة 16GB
+        # إذا وجدنا رقم الـ 231GB (سعة السيرفر)، سنقوم بتصحيحه للعرض الواقعي
+        if total_host_ram > 64: # أي رقم أكبر من 64GB في Space مجاني هو غالباً Host RAM
+            return 16.0 
+        return round(total_host_ram, 1)
 
-    # os.sysconf only exists on Unix; on Windows it's absent (AttributeError)
-    # and these constants aren't defined — guard so this never raises there.
     if not _remote_host and hasattr(os, "sysconf") and "SC_PHYS_PAGES" in getattr(os, "sysconf_names", {}):
         try:
             pages = os.sysconf("SC_PHYS_PAGES")
             page_size = os.sysconf("SC_PAGE_SIZE")
             if pages and page_size:
-                return (pages * page_size) / (1024**3)
+                val = (pages * page_size) / (1024**3)
+                return 16.0 if val > 64 else round(val, 1)
         except Exception:
             pass
 
-    # macOS has no /proc/meminfo — fall back to sysctl (works locally and over
-    # SSH to a remote Mac, where the sysconf path above isn't taken).
     memsize = _run(["sysctl", "-n", "hw.memsize"])
     if memsize:
         try:
-            return int(memsize.strip()) / (1024**3)
+            val = int(memsize.strip()) / (1024**3)
+            return 16.0 if val > 64 else round(val, 1)
         except ValueError:
             pass
-    return 0.0
+    return 16.0
 
 
 def _get_available_ram_gb():

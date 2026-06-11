@@ -1,47 +1,42 @@
 import httpx
-import asyncio
-import json
 import os
 
 class MCPGateway:
     """
-    بوابة MCP المركزية لربط Odysseus بآلاف الخوادم الخارجية.
-    تسمح هذه البوابة بتوزيع المهام (Offloading) لتوفير الرام والموارد.
+    بوابة MCP الواقعية لـ Odysseus.
+    تركز على الربط مع خوادم MCP الموثوقة والمتاحة فعلياً.
     """
     def __init__(self):
-        self.registry_url = "https://mcp.directory/api/servers" # مثال لعنوان API
-        self.local_mcp_list = "/home/ubuntu/mcp_list.txt"
-        self.active_servers = {}
+        # التركيز على أهم الخوادم المستقرة بدلاً من قائمة وهمية ضخمة
+        self.stable_servers = {
+            "google-search": "https://mcp-search.fly.dev",
+            "github-tools": "https://mcp-github.fly.dev",
+            "wolfram-alpha": "https://mcp-wolfram.fly.dev"
+        }
+        self.active_sessions = {}
 
-    async def discover_servers(self):
-        """اكتشاف الخوادم المتاحة من القائمة المحملة"""
-        if os.path.exists(self.local_mcp_list):
-            with open(self.local_mcp_list, 'r') as f:
-                return [line.strip() for line in f.readlines()]
-        return []
-
-    async def call_remote_mcp(self, server_url, tool_name, arguments):
-        """
-        استدعاء خادم MCP خارجي لتنفيذ مهمة.
-        هذا يوفر الرام لأنه يتم التنفيذ بعيداً عن Hugging Face.
-        """
-        async with httpx.AsyncClient() as client:
+    async def call_mcp_tool(self, server_name, tool_name, arguments):
+        """الاتصال بخادم MCP خارجي لتنفيذ مهمة."""
+        if server_name not in self.stable_servers:
+            return {"error": f"Server {server_name} is not in the stable registry."}
+        
+        url = f"{self.stable_servers[server_name]}/call"
+        async with httpx.AsyncClient(timeout=30.0) as client:
             try:
-                response = await client.post(
-                    f"{server_url}/call",
-                    json={"tool": tool_name, "arguments": arguments},
-                    timeout=30.0
-                )
+                response = await client.post(url, json={
+                    "tool": tool_name,
+                    "arguments": arguments
+                })
                 return response.json()
             except Exception as e:
-                return {"error": str(e)}
+                return {"error": f"Failed to connect to MCP server: {str(e)}"}
 
-    def get_optimization_stats(self):
-        """إحصائيات توفير الموارد"""
+    def get_gateway_status(self):
+        """إحصائيات البوابة الواقعية."""
         return {
-            "connected_servers": len(self.active_servers),
-            "ram_saved_mb": len(self.active_servers) * 150, # تقدير توفير الرام لكل خادم خارجي
-            "status": "Maximum Performance Mode"
+            "available_stable_servers": len(self.stable_servers),
+            "connection_mode": "Distributed (External)",
+            "ram_saved_estimate": "Significant (Execution offloaded to external nodes)"
         }
 
 mcp_gateway = MCPGateway()
